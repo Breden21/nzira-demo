@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="description" content="Nzira: a demonstration of a chrome sample chain-of-custody trail, using made-up sample data.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='9' fill='%2310231e'/%3E%3Cpath d='M8 24.5 14 17l5 3.5L26 9' stroke='%23f2f6f4' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>Nzira</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a survey-sheet feel. Slim masthead, a ruled summary strip, then a ledger of samples beside one record sheet.
+   Hairlines and type carry the structure; colour is kept for status. Steel is the only accent. */
+:root{
+  --bg:#f2f4f3; --surface:#fafbfa; --ink:#0c1613; --muted:#5d6a65; --faint:#8a9690; --line:#d3dad6; --line-2:#e3e8e5;
+  --btn-bg:#10231e; --btn-fg:#f2f6f4; --steel:#2b4a42;
+  --ok:#2c8156; --warn:#a96a15; --crit:#bb372d; --open:#7d8984;
+  --map-bg:#e8ece9; --map-grid:#cdd5d1; --map-site:#dfe8e4;
+  --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"Instrument Serif","Iowan Old Style",Georgia,serif;
+  --mono:"DM Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#090f0d; --surface:#0e1613; --ink:#e7eeea; --muted:#8f9d97; --faint:#6a7872; --line:#1f2c27; --line-2:#16211d;
+  --btn-bg:#d7e2de; --btn-fg:#0a1311; --steel:#b7c7c1;
+  --ok:#6fcf9a; --warn:#e6aa55; --crit:#f27f73; --open:#8b9792;
+  --map-bg:#0b1411; --map-grid:#1a2823; --map-site:#101d19; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#090f0d; --surface:#0e1613; --ink:#e7eeea; --muted:#8f9d97; --faint:#6a7872; --line:#1f2c27; --line-2:#16211d;
+  --btn-bg:#d7e2de; --btn-fg:#0a1311; --steel:#b7c7c1;
+  --ok:#6fcf9a; --warn:#e6aa55; --crit:#f27f73; --open:#8b9792;
+  --map-bg:#0b1411; --map-grid:#1a2823; --map-site:#101d19; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding-block:0 56px;padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+p{margin:0} button,input,select{font:inherit;color:inherit}
+button{cursor:pointer} :focus-visible{outline:2px solid var(--steel);outline-offset:3px;border-radius:2px}
+.mono{font-family:var(--mono);font-size:.9em}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+sub{font-size:.68em;line-height:0}
+
+/* masthead */
+.mast{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 24px;padding-block:20px 16px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand svg{flex:none}
+.brand .nm{font-family:var(--serif);font-size:34px;line-height:1;letter-spacing:.005em}
+.brand .tg{display:block;margin-top:3px}
+.who{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.who .eyebrow{display:none}
+@media(min-width:560px){.who .eyebrow{display:inline}}
+.seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px}
+.seg button{border:0;background:transparent;padding:7px 14px;min-height:36px;border-radius:999px;color:var(--muted);font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--btn-bg);color:var(--btn-fg)}
+.notice{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;padding-block:11px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
+.notice b{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--warn)}
+.rolenote{flex:1 1 260px}
+
+/* summary strip */
+.strip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-bottom:1px solid var(--line)}
+@media(min-width:760px){.strip{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.fig{padding:18px 16px 16px 0;border-bottom:1px solid var(--line-2);min-width:0}
+.fig:nth-child(odd){padding-right:16px}
+@media(min-width:760px){.fig{border-bottom:0;padding:22px 20px 20px;border-left:1px solid var(--line-2)}.fig:first-child{border-left:0;padding-left:0}}
+.fig .n{font-family:var(--serif);font-size:46px;line-height:1;font-variant-numeric:lining-nums}
+.fig .n small{font-size:.5em;margin-left:2px;color:var(--muted)}
+.fig .l{margin-top:8px;font-size:13px;color:var(--muted)}
+.fig.bad .n{color:var(--crit)} .fig.good .n{color:var(--ok)}
+.fig.alert .n{color:var(--warn)}
+
+/* tabs */
+.tabs{display:flex;gap:26px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;background:transparent;padding:16px 0 13px;color:var(--faint);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px;min-height:48px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+
+/* ledger + record */
+.split{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin-top:0}
+@media(min-width:900px){.split{grid-template-columns:minmax(0,420px) minmax(0,1fr)}.split .list{border-right:1px solid var(--line)}.split .sheet{padding-left:36px}}
+@media(max-width:899px){.split.has-sel .list{display:none}}
+@media(min-width:900px){.back{display:none!important}}
+.list{display:flex;flex-direction:column;min-width:0}
+.lhead{display:grid;grid-template-columns:1fr auto;padding:14px 0 10px;border-bottom:1px solid var(--line)}
+.rec{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"id stat" "steps res";gap:10px 14px;align-items:center;text-align:left;width:100%;background:transparent;border:0;border-bottom:1px solid var(--line-2);padding:15px 18px 15px 0;min-height:76px;position:relative}
+.rec[aria-current="true"]{background:linear-gradient(90deg,color-mix(in srgb,var(--steel) 8%,transparent),transparent)}
+.rec[aria-current="true"]::before{content:"";position:absolute;left:-18px;top:0;bottom:0;width:3px;background:var(--ink)}
+@media(min-width:900px){.rec{padding-right:20px}.rec[aria-current="true"]::before{left:0}.rec{padding-left:14px}}
+.rid{grid-area:id;min-width:0}
+.rid b{font-family:var(--mono);font-weight:500;font-size:15px;display:block}
+.rid span{font-size:12.5px;color:var(--muted)}
+.stat{grid-area:stat;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--open);flex:none}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.crit{background:var(--crit)}
+.steps{grid-area:steps;display:flex;gap:3px;align-items:center}
+.steps i{display:block;width:30px;height:3px;background:var(--line)}
+.steps i.on{background:var(--ink)}
+.steps i.on.crit{background:var(--crit)}
+.res{grid-area:res;font-family:var(--serif);font-size:22px;line-height:1;text-align:right;font-variant-numeric:lining-nums}
+.res small{font-family:var(--sans);font-size:11px;color:var(--muted);margin-left:2px}
+.res.none{font-family:var(--sans);font-size:12.5px;color:var(--faint)}
+
+.sheet{min-width:0;padding-top:22px}
+.back{margin-bottom:12px}
+.sh-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px}
+.sh-top h2{font-family:var(--serif);font-weight:400;font-size:52px;line-height:.95;margin:6px 0 0;letter-spacing:.005em}
+.sub-line{margin-top:10px;color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.state{display:inline-flex;align-items:center;gap:8px;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:5px 12px}
+.sec{padding-block:24px 4px;border-top:1px solid var(--line);margin-top:24px}
+.sec h3{margin:0 0 12px;font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 28px;margin:0}
+.facts div{padding:11px 0;border-top:1px solid var(--line-2);min-width:0}
+.facts div:first-child,.facts div:nth-child(2){border-top:0}
+.facts dt{font-size:12px;color:var(--faint)}
+.facts dd{margin:3px 0 0;overflow-wrap:anywhere}
+.bigres{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.bigres .v{font-family:var(--serif);font-size:56px;line-height:1}
+.bigres .u{color:var(--muted)}
+.bigres .t{flex-basis:100%;font-size:13px;color:var(--muted)}
+.checks{list-style:none;margin:0;padding:0}
+.checks li{display:grid;grid-template-columns:14px 1fr;gap:10px;padding:11px 0;border-top:1px solid var(--line-2);font-size:14.5px}
+.checks li:first-child{border-top:0;padding-top:0}
+.checks li i{width:8px;height:8px;margin-top:7px;background:var(--ok);border-radius:50%}
+.checks li.warn i{background:var(--warn)} .checks li.crit i{background:var(--crit)}
+.sms{max-width:340px;border:1px solid var(--line);border-radius:18px;padding:14px 14px 12px;background:var(--surface)}
+.sms .from{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--faint);display:flex;justify-content:space-between;margin-bottom:8px}
+.sms .msg{font-size:14.5px;line-height:1.45;overflow-wrap:anywhere}
+.chain{list-style:none;margin:0;padding:0}
+.chain li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:0 12px;min-width:0}
+.chain .rail{position:relative}
+.chain .rail::before{content:"";position:absolute;left:10px;top:20px;bottom:-4px;width:1px;background:var(--line)}
+.chain li:last-child .rail::before{display:none}
+.chain .rail i{position:absolute;left:5px;top:7px;width:11px;height:11px;border-radius:50%;border:2px solid var(--ink);background:var(--bg)}
+.chain li.bad .rail i{border-color:var(--crit);background:var(--crit)}
+.chain li.bad .rail::before{background:var(--crit)}
+.chain .body{padding-bottom:22px;min-width:0}
+.chain .what{font-weight:500}
+.chain .when{font-size:13px;color:var(--muted)}
+.chain .fp{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:4px;overflow-wrap:anywhere}
+.chain li.bad .fp{color:var(--crit)}
+.vline{margin-top:4px;font-size:14px;color:var(--muted)}
+.vline.ok{color:var(--ok)} .vline.bad{color:var(--crit)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;align-items:center}
+.btn{border:1px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg);border-radius:999px;padding:10px 20px;min-height:44px;font-weight:500}
+.btn.quiet{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.quiet:hover{border-color:var(--ink)}
+.btn.link{background:transparent;border-color:transparent;color:var(--crit);padding-inline:6px}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+form.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px 18px;margin-top:20px;align-items:end}
+label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted);min-width:0}
+input,select{background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:9px 0;min-height:44px;width:100%;color:var(--ink);font-size:16px}
+input:focus,select:focus{outline:none;border-bottom-color:var(--ink)}
+input[readonly]{color:var(--muted)}
+select option{color:#000}
+
+/* site plan */
+.plan{margin-top:22px}
+.mapbox{overflow-x:auto;border:1px solid var(--line)}
+.mapbox svg{display:block;width:100%;height:auto;min-width:640px;max-width:1000px;background:var(--map-bg)}
+.swipe{display:none;margin-top:10px}
+@media(max-width:699px){.swipe{display:block}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:12px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+
+.help{border-bottom:1px solid var(--line);padding-block:14px}
+.help summary{cursor:pointer;font-weight:500;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.help summary::after{content:"+";font-family:var(--mono);color:var(--faint)}
+.help[open] summary::after{content:"\2212"}
+.help summary::-webkit-details-marker{display:none}
+.help ol{margin:12px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:14.5px}
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding-block:22px}
+.tools .grow{flex:1}
+.foot{border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--faint);display:flex;flex-direction:column;gap:8px;max-width:78ch}
+.empty{padding:36px 0;color:var(--muted);max-width:46ch}
+.empty b{display:block;font-family:var(--serif);font-weight:400;font-size:26px;color:var(--ink);margin-bottom:6px}
+@media(prefers-reduced-motion:no-preference){.btn,.rec,.tabs button{transition:background .15s,border-color .15s,color .15s}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true"><rect x=".75" y=".75" width="32.5" height="32.5" rx="9" stroke="currentColor" stroke-width="1.5"/><path d="M8 24.5 14 17l5 3.5L26 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="24.5" r="2.2" fill="currentColor"/><circle cx="14" cy="17" r="2.2" fill="currentColor"/><circle cx="26" cy="9" r="2.2" fill="currentColor"/></svg>
+      <div><span class="nm" id="nm">Nzira</span><span class="eyebrow tg">Chrome sample trail</span></div>
+    </div>
+    <div class="who">
+      <span class="eyebrow">Viewing as</span>
+      <div class="seg" role="group" aria-label="Viewing as">
+        <button data-act="role" data-v="agent" aria-pressed="true">Field agent</button>
+        <button data-act="role" data-v="lab" aria-pressed="false">Lab</button>
+        <button data-act="role" data-v="geo" aria-pressed="false">Geologist</button>
+      </div>
+    </div>
+  </header>
+  <div class="notice"><b>Sample data</b><span>Made-up samples, coordinates, lab and results. Nothing here is a real site or a real assay.</span><span class="rolenote" id="rolenote"></span></div>
+
+  <div class="strip" id="stats"></div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-act="tab" data-v="samples" aria-selected="true">Ledger</button>
+    <button role="tab" data-act="tab" data-v="map" aria-selected="false">Site plan</button>
+    <button role="tab" data-act="tab" data-v="log" aria-selected="false">Log a sample</button>
+  </nav>
+  <div id="view"></div>
+
+  <div class="tools">
+    <button class="btn quiet" data-act="verifyall">Verify all records</button>
+    <button class="btn quiet" data-act="clock">Move demo clock forward 24 h</button>
+    <span class="grow"></span>
+    <span class="eyebrow" id="clock"></span>
+    <button class="btn quiet" data-act="reset">Reset</button>
+  </div>
+
+  <details class="help"><summary>Try it in four steps</summary>
+    <ol>
+      <li>Open <span class="mono">CR-004</span>. The check flags a long wait between hand-over and the lab.</li>
+      <li>Open <span class="mono">CR-006</span> or <span class="mono">CR-011</span>. The duplicate does not agree with the original.</li>
+      <li>Switch to Geologist and open the Site plan. <span class="mono">CR-008</span> sits outside the site boundary.</li>
+      <li>Open any sample, choose "Alter a record (demo)", then "Verify record". The altered entry is caught.</li>
+    </ol>
+  </details>
+  <details class="help"><summary>What a pilot would measure</summary>
+    <ol>
+      <li>Time from sampling to a result the miner can read, against today's paper process.</li>
+      <li>Share of samples with a complete, verifiable custody record.</li>
+      <li>Share of results that fail a quality check, and how many a geologist then clears.</li>
+      <li>Cost per sample for the operator and the lab.</li>
+    </ol>
+  </details>
+  <div class="foot" style="margin-top:28px">
+    <p>Checks in this demo are examples. Limits such as 10% duplicate difference and 48 hours between hand-over and lab receipt will be set with geologists and the laboratory.</p>
+    <p>Screening results are always shown as preliminary. A result is only called certified when it comes from a laboratory assay. Certification itself depends on the laboratory's own accreditation.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var H=3600000, SITE=[[80,60],[1100,40],[1160,720],[620,780],[100,700]];
+var ROLES={
+  agent:'Field agent: logs samples and hand-overs. Positions show only to a 200 m grid.',
+  lab:'Lab: receives samples and adds assay results. Positions are hidden.',
+  geo:'Geologist: sees exact positions, every check and the full record, and adds review notes.'
+};
+var S={role:'agent',tab:'samples',sel:null,offset:0,samples:[],ver:{},draft:{type:'sample',parent:'',pos:null,agent:'Agent T.'}};
+
+function now(){return Date.now()+S.offset}
+function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function fmt(t){return new Date(t).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
+function hrs(a,b){return Math.round((b-a)/H)}
+function inPoly(x,y){var c=false;for(var i=0,j=SITE.length-1;i<SITE.length;j=i++){var xi=SITE[i][0],yi=SITE[i][1],xj=SITE[j][0],yj=SITE[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c}return c}
+function fallbackHash(s){var h1=0xdeadbeef,h2=0x41c6ce57;for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677)}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return (h2>>>0).toString(16).padStart(8,'0')+(h1>>>0).toString(16).padStart(8,'0')}
+async function sha(s){try{if(window.crypto&&crypto.subtle){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0')}).join('')}}catch(e){}return fallbackHash(s)}
+function body(id,e){return JSON.stringify([id,e.type,e.time,e.actor,e.place,e.note,e.data])}
+async function addEvent(s,o){var e={type:o.type,time:o.time==null?now():o.time,actor:o.actor,place:o.place||'',note:o.note||'',data:o.data||null};var prev=s.events.length?s.events[s.events.length-1].hash:'START';e.hash=await sha(prev+body(s.id,e));s.events.push(e)}
+async function verifyChain(s){var prev='START';for(var i=0;i<s.events.length;i++){var e=s.events[i];var h=await sha(prev+body(s.id,e));if(h!==e.hash)return {ok:false,bad:i};prev=e.hash}return {ok:true}}
+function ev(s,type){return s.events.filter(function(e){return e.type===type})}
+function lastResult(s){var r=ev(s,'result');return r.length?r[r.length-1]:null}
+function byId(id){return S.samples.filter(function(s){return s.id===id})[0]}
+function pad(n){return String(n).padStart(3,'0')}
+
+function flagsOf(s){
+  var f=[],t=ev(s,'taken')[0],hand=ev(s,'handover')[0],rec=ev(s,'received')[0],res=lastResult(s),age=hrs(t.time,now());
+  if(S.ver[s.id]&&!S.ver[s.id].ok)f.push({lv:'crit',txt:'A record in this trail does not match its fingerprint. It was changed after it was saved.'});
+  if(s.E!=null&&!inPoly(s.E,s.N))f.push({lv:'crit',txt:'Position is outside the declared site boundary.'});
+  if(hand&&rec&&hrs(hand.time,rec.time)>48)f.push({lv:'warn',txt:hrs(hand.time,rec.time)+' h passed between hand-over and lab receipt. Demo limit is 48 h.'});
+  if(!rec&&age>72)f.push({lv:'warn',txt:'Not received at the lab after '+Math.floor(age/24)+' days. Demo limit is 3 days.'});
+  if(res&&res.data.method==='lab'&&!rec)f.push({lv:'crit',txt:'A laboratory result exists but the sample was never logged as received.'});
+  if(s.type==='blank'&&res&&res.data.cr>1)f.push({lv:'crit',txt:'Blank reads '+res.data.cr+'% Cr2O3. Above 1% suggests contamination.'});
+  var pair=s.type==='duplicate'?byId(s.parent):S.samples.filter(function(x){return x.parent===s.id})[0];
+  if(pair){var a=lastResult(s),b=lastResult(pair);
+    if(a&&b){var d=Math.abs(a.data.cr-b.data.cr)/((a.data.cr+b.data.cr)/2)*100;
+      if(d>10)f.push({lv:'warn',txt:(s.type==='duplicate'?'Duplicate':'Its duplicate '+pair.id)+' differs from '+(s.type==='duplicate'?pair.id:'this sample')+' by '+Math.round(d)+'% ('+a.data.cr+' vs '+b.data.cr+'). Demo limit is 10%.'})}}
+  return f}
+function statusOf(s){var f=flagsOf(s);if(f.some(function(x){return x.lv==='crit'}))return 'crit';if(f.length)return 'warn';return lastResult(s)?'ok':'open'}
+var LBL={ok:'No flags',warn:'Check',crit:'Flagged',open:'No result yet'};
+function resultLabel(r){return r.data.method==='lab'?'Laboratory assay · certified':'Field screening · preliminary'}
+function smsText(s){var r=lastResult(s),f=flagsOf(s),m;
+  if(!r)m=s.id+': sample logged '+fmt(ev(s,'taken')[0].time)+'. No result yet.';
+  else if(r.data.method==='lab')m=s.id+': laboratory assay, Cr2O3 '+r.data.cr+'%. Certified result.';
+  else m=s.id+': preliminary screening, about '+Math.round(r.data.cr)+'% Cr2O3. Not a certified assay. Do not rely on it for a sale.';
+  if(f.length&&r)m+=' Flagged for geologist review.';return m}
+function posText(s){if(s.E==null)return 'Not applicable';if(S.role==='lab')return 'Hidden for this role';
+  if(S.role==='geo')return 'E '+Math.round(s.E)+' m, N '+Math.round(s.N)+' m (demo grid)';
+  var e=Math.floor(s.E/200)*200,n=Math.floor(s.N/200)*200;return 'Grid cell E '+e+'-'+(e+200)+', N '+n+'-'+(n+200)+' m'}
+
+var SPEC=[
+ {id:'CR-001',E:240,N:180,t0:0,h:3,r:26,a:50,cr:41.8},
+ {id:'CR-002',E:430,N:260,t0:.5,h:3.5,r:27,a:51,cr:38.4},
+ {id:'CR-003',E:610,N:330,t0:1,h:4,r:27,a:52,cr:44.1},
+ {id:'CR-004',E:760,N:410,t0:1.5,h:4.5,r:75,a:90,cr:36.9},
+ {id:'CR-005',E:520,N:520,t0:2},
+ {id:'CR-006',E:880,N:300,t0:2.5,h:5,r:28,a:53,cr:42.0},
+ {id:'CR-007',E:330,N:560,t0:3,h:5,r:28,a:53,cr:33.7},
+ {id:'CR-008',E:1300,N:400,t0:3.5,h:6,r:29,a:54,cr:39.0},
+ {id:'CR-009',E:700,N:600,t0:50,h:53,screen:{at:51,cr:37}},
+ {id:'CR-010',type:'duplicate',parent:'CR-003',E:611,N:331,t0:1.2,h:4,r:27,a:52,cr:43.6},
+ {id:'CR-011',type:'duplicate',parent:'CR-006',E:881,N:301,t0:2.7,h:5.5,r:28,a:53,cr:36.5},
+ {id:'CR-012',type:'blank',E:null,N:null,t0:2.8,h:5.5,r:28,a:53,cr:0.4}
+];
+async function seed(){
+  S.samples=[];S.ver={};S.sel=null;S.offset=0;var base=Date.now()-96*H;
+  for(var i=0;i<SPEC.length;i++){var p=SPEC[i];
+    var s={id:p.id,type:p.type||'sample',parent:p.parent||null,batch:'B-07',E:p.E,N:p.N,events:[]};
+    await addEvent(s,{type:'taken',actor:'Agent T.',place:p.E==null?'Depot':'Site',note:s.type==='blank'?'Blank inserted at depot':'',time:base+p.t0*H});
+    if(p.h!=null)await addEvent(s,{type:'handover',actor:'Agent T.',place:'Transport',note:'Handed to transport',time:base+p.h*H});
+    if(p.screen)await addEvent(s,{type:'result',actor:'Agent T.',place:'Field',data:{method:'field',cr:p.screen.cr},time:base+p.screen.at*H});
+    if(p.r!=null)await addEvent(s,{type:'received',actor:'Lab clerk',place:'Lab reception',note:'Received, bag seal intact',time:base+p.r*H});
+    if(p.a!=null)await addEvent(s,{type:'result',actor:'Lab analyst',place:'Lab',data:{method:'lab',cr:p.cr},time:base+p.a*H});
+    S.samples.push(s)}
+  await verifyAll(true)}
+async function verifyAll(quiet){S.ver={};for(var i=0;i<S.samples.length;i++){S.ver[S.samples[i].id]=await verifyChain(S.samples[i])}if(!quiet)render()}
+
+var EVN={taken:'Sample taken',handover:'Handed over',received:'Received at lab',result:'Result added',review:'Geologist review'};
+function sj(t){return t.replace('Cr2O3','Cr<sub>2</sub>O<sub>3</sub>')}
+function typeLine(s){return s.type==='duplicate'?'Duplicate of '+esc(s.parent):s.type==='blank'?'Blank':'Field sample'}
+function stepsHtml(s,st){var a=[true,ev(s,'handover').length>0,ev(s,'received').length>0,!!lastResult(s)];
+  return '<span class="steps" role="img" aria-label="Custody steps done: '+a.filter(Boolean).length+' of 4">'+a.map(function(x){return '<i class="'+(x?'on'+(st==='crit'?' crit':''):'')+'"></i>'}).join('')+'</span>'}
+
+function renderStats(){
+  var n=S.samples.length,done=S.samples.filter(function(s){return ev(s,'received').length}).length,fl=S.samples.filter(function(s){var x=statusOf(s);return x==='crit'||x==='warn'}).length;
+  var bad=Object.keys(S.ver).filter(function(k){return S.ver[k]&&!S.ver[k].ok}).length;
+  var f=S.samples.filter(function(s){return s.type==='sample'}).length,d=S.samples.filter(function(s){return s.type==='duplicate'}).length,b=S.samples.filter(function(s){return s.type==='blank'}).length;
+  var need=f>=5?Math.max(1,Math.floor(f/10)):0,met=d>=need&&b>=need;
+  document.getElementById('stats').innerHTML=
+   '<div class="fig"><div class="n">'+n+'</div><div class="l">Samples in batch B-07</div></div>'+
+   '<div class="fig"><div class="n">'+(n?Math.round(done/n*100):0)+'<small>%</small></div><div class="l">Received at the lab</div></div>'+
+   '<div class="fig '+(fl?'alert':'good')+'"><div class="n">'+fl+'</div><div class="l">To review</div></div>'+
+   '<div class="fig '+(bad?'bad':'good')+'"><div class="n">'+(bad?bad+' altered':'Intact')+'</div><div class="l">Record check'+(met?'':' · batch needs '+need+' duplicate and '+need+' blank')+'</div></div>'}
+function renderRole(){
+  document.getElementById('rolenote').textContent=ROLES[S.role];
+  [].forEach.call(document.querySelectorAll('[data-act="role"]'),function(b){b.setAttribute('aria-pressed',b.dataset.v===S.role)});
+  [].forEach.call(document.querySelectorAll('[data-act="tab"]'),function(b){b.setAttribute('aria-selected',b.dataset.v===S.tab)});
+  document.getElementById('clock').textContent='Demo time '+fmt(now())+(S.offset?' · +'+Math.round(S.offset/H)+' h':'')}
+function listHtml(){
+  var rows=S.samples.slice().sort(function(a,b){return a.id<b.id?-1:1}).map(function(s){var st=statusOf(s),r=lastResult(s);
+    return '<button class="rec" data-act="select" data-v="'+s.id+'" aria-current="'+(S.sel===s.id)+'">'+
+      '<span class="rid"><b>'+s.id+'</b><span>'+typeLine(s)+'</span></span>'+
+      '<span class="stat"><i class="dot '+st+'"></i>'+LBL[st]+'</span>'+stepsHtml(s,st)+
+      (r?'<span class="res">'+esc(r.data.cr)+'<small>% Cr<sub>2</sub>O<sub>3</sub></small></span>':'<span class="res none">No result</span>')+'</button>'}).join('');
+  return '<div class="list"><div class="lhead"><span class="eyebrow">Sample</span><span class="eyebrow">Check · result</span></div>'+rows+'</div>'}
+function detailHtml(){
+  var s=byId(S.sel);if(!s)return '<div class="sheet"><div class="empty"><b>Pick a sample</b>Its full custody trail, its checks and the message the miner would receive appear here.</div></div>';
+  var st=statusOf(s),r=lastResult(s),f=flagsOf(s),v=S.ver[s.id],t=ev(s,'taken')[0],hand=ev(s,'handover').length,rec=ev(s,'received').length;
+  var bad=v&&!v.ok?v.bad:-1,m=smsText(s);
+  var h='<div class="sheet"><button class="btn quiet back" data-act="back">Back to ledger</button>'+
+   '<div class="sh-top"><div><span class="eyebrow">Sample record</span><h2>'+s.id+'</h2></div><span class="state"><i class="dot '+st+'"></i>'+LBL[st]+'</span></div>'+
+   '<div class="sub-line"><span>'+typeLine(s)+'</span><span>Batch '+s.batch+'</span><span>Taken '+fmt(t.time)+' by '+esc(t.actor)+'</span></div>'+
+   '<div class="sec"><h3>Result</h3>'+(r?'<div class="bigres"><span class="v">'+esc(r.data.cr)+'</span><span class="u">% Cr<sub>2</sub>O<sub>3</sub></span><span class="t">'+resultLabel(r)+'</span></div>':'<p class="muted" style="color:var(--muted)">No result yet.</p>')+
+   '<dl class="facts" style="margin-top:18px"><div><dt>Position</dt><dd>'+esc(posText(s))+'</dd></div><div><dt>Custody</dt><dd>'+(rec?'Received at lab':hand?'In transit':'With sampler')+'</dd></div></dl></div>'+
+   '<div class="sec"><h3>Checks</h3><ul class="checks">'+(f.length?f.map(function(x){return '<li class="'+x.lv+'"><i></i><span>'+esc(x.txt)+'</span></li>'}).join(''):'<li><i></i><span>All checks pass for this sample.</span></li>')+'</ul></div>'+
+   '<div class="sec"><h3>Message to the miner</h3><div class="sms"><div class="from"><span>NZIRA</span><span>SMS or WhatsApp</span></div><div class="msg">'+esc(m)+'</div></div><p class="mono" style="margin-top:8px;color:var(--faint);font-size:12px">'+m.length+' characters</p></div>'+
+   '<div class="sec"><h3>Custody trail</h3><ol class="chain">'+s.events.map(function(e,i){
+      var det=e.type==='result'?(e.data.cr+'% Cr2O3, '+(e.data.method==='lab'?'laboratory assay':'field screening')):e.note,prev=i?s.events[i-1].hash.slice(0,8):'start';
+      return '<li class="'+(bad===i?'bad':'')+'"><div class="rail"><i></i></div><div class="body"><div class="what">'+EVN[e.type]+(det?' · '+esc(det).replace('Cr2O3','Cr<sub>2</sub>O<sub>3</sub>'):'')+'</div><div class="when">'+fmt(e.time)+' · '+esc(e.actor)+(e.place?' · '+esc(e.place):'')+'</div>'+
+        '<div class="fp">'+e.hash.slice(0,8)+' ← '+prev+(bad===i?' · does not match this entry':'')+'</div></div></li>'}).join('')+'</ol>'+
+   '<p class="vline '+(v?(v.ok?'ok':'bad'):'')+'">'+(v?(v.ok?'Verified. Every entry matches its fingerprint and the one before it.':'Check failed at entry '+(v.bad+1)+'. That entry was altered after it was saved.'):'Not verified since the last change.')+'</p>';
+  var a='<button class="btn quiet" data-act="verify" data-v="'+s.id+'">Verify record</button>';
+  if(S.role==='agent'&&!hand)a='<button class="btn" data-act="handover" data-v="'+s.id+'">Hand over to transport</button>'+a;
+  if(S.role==='lab'&&hand&&!rec)a='<button class="btn" data-act="receive" data-v="'+s.id+'">Mark received at lab</button>'+a;
+  a+='<button class="btn link" data-act="tamper" data-v="'+s.id+'">Alter a record (demo)</button>';
+  h+='<div class="actions">'+a+'</div>';
+  if(S.role==='lab'&&rec&&!(r&&r.data.method==='lab'))h+=resultForm(s,'lab');
+  if(S.role==='agent'&&!r)h+=resultForm(s,'field');
+  if(S.role==='geo')h+='<form class="f" data-form="review" data-id="'+s.id+'"><label>Review note<input id="rv-note" required maxlength="140" placeholder="Checked against field notes"></label><button class="btn" type="submit">Add review note</button></form>';
+  return h+'</div></div>'}
+function resultForm(s,kind){return '<form class="f" data-form="result" data-kind="'+kind+'" data-id="'+s.id+'"><label>'+(kind==='lab'?'Laboratory assay':'Field screening')+', Cr2O3 %<input id="res-cr" type="number" step="0.1" min="0" max="100" inputmode="decimal" required></label><button class="btn" type="submit">Add '+(kind==='lab'?'assay':'screening')+' result</button></form>'}
+function mapHtml(){
+  if(S.role==='lab')return '<div class="empty"><b>Positions are hidden for the lab</b>Switch to Geologist for exact positions, or Field agent for a 200 m grid.</div>';
+  var Y=function(n){return 840-n},g='',X=function(e){return e+30};
+  for(var x=0;x<=1200;x+=200){g+='<line x1="'+X(x)+'" y1="'+Y(0)+'" x2="'+X(x)+'" y2="'+Y(800)+'" stroke="var(--map-grid)" stroke-width="1.5"/><text x="'+X(x)+'" y="'+(Y(0)+34)+'" text-anchor="middle" font-size="22" fill="var(--faint)" font-family="DM Mono,monospace">'+x+'</text>'}
+  for(var n=0;n<=800;n+=200){g+='<line x1="'+X(0)+'" y1="'+Y(n)+'" x2="'+X(1360)+'" y2="'+Y(n)+'" stroke="var(--map-grid)" stroke-width="1.5"/><text x="'+(X(0)-10)+'" y="'+(Y(n)+7)+'" text-anchor="end" font-size="22" fill="var(--faint)" font-family="DM Mono,monospace">'+n+'</text>'}
+  var poly=SITE.map(function(p){return X(p[0])+','+Y(p[1])}).join(' ');
+  var col={ok:'var(--ok)',warn:'var(--warn)',crit:'var(--crit)',open:'var(--open)'},pts='';
+  S.samples.forEach(function(s){if(s.E==null)return;var e=s.E,n=s.N;if(S.role!=='geo'){e=Math.floor(e/200)*200+100;n=Math.floor(n/200)*200+100}
+    var cx=X(e),cy=Y(n),c=col[statusOf(s)],sel=S.sel===s.id,shape;
+    if(s.type==='duplicate')shape='<path d="M'+cx+' '+(cy-17)+' L'+(cx+17)+' '+cy+' L'+cx+' '+(cy+17)+' L'+(cx-17)+' '+cy+'Z" fill="'+c+'"/>';
+    else shape='<circle cx="'+cx+'" cy="'+cy+'" r="11" fill="'+c+'"/><circle cx="'+cx+'" cy="'+cy+'" r="19" fill="none" stroke="'+c+'" stroke-width="2"/>';
+    pts+='<g data-act="mapsel" data-v="'+s.id+'" style="cursor:pointer" tabindex="0" role="button" aria-label="Sample '+s.id+'">'+(sel?'<circle cx="'+cx+'" cy="'+cy+'" r="32" fill="none" stroke="var(--ink)" stroke-width="2.5"/>':'')+'<circle cx="'+cx+'" cy="'+cy+'" r="38" fill="transparent"/>'+shape+'<text x="'+(cx+28)+'" y="'+(cy-18)+'" font-size="26" fill="var(--ink)" font-family="DM Mono,monospace">'+s.id.slice(3)+'</text></g>'});
+  var tb='<g transform="translate(1040 90)"><rect width="320" height="100" fill="var(--map-bg)" stroke="var(--faint)" stroke-width="1.5"/><line x1="0" y1="40" x2="320" y2="40" stroke="var(--faint)" stroke-width="1"/><text x="14" y="28" font-size="22" fill="var(--ink)" font-family="DM Mono,monospace" letter-spacing="2">NZIRA · SITE PLAN</text><text x="14" y="68" font-size="19" fill="var(--muted)" font-family="DM Mono,monospace">Demo grid, metres</text><text x="14" y="90" font-size="19" fill="var(--muted)" font-family="DM Mono,monospace">Sample data</text></g>';
+  var north='<g transform="translate(1330 40)"><path d="M0 -16 L9 12 L0 5 L-9 12Z" fill="var(--ink)"/><text y="34" text-anchor="middle" font-size="20" fill="var(--ink)" font-family="DM Mono,monospace">N</text></g>';
+  var svg='<svg viewBox="0 0 1400 900" role="img" aria-label="Sample positions on a demo site plan">'+g+
+   '<polygon points="'+poly+'" fill="var(--map-site)" stroke="var(--steel)" stroke-width="2.5" stroke-dasharray="16 9"/>'+pts+tb+north+'</svg>';
+  var note=S.role==='geo'?'Exact positions.':'Positions snapped to the centre of a 200 m cell for this role.';
+  return '<div class="plan"><div class="mapbox">'+svg+'</div><p class="eyebrow swipe">Swipe the plan sideways to pan</p><div class="legend"><span><i class="dot ok"></i>No flags</span><span><i class="dot warn"></i>Check</span><span><i class="dot crit"></i>Flagged</span><span><i class="dot"></i>No result yet</span><span>Diamond: duplicate</span><span>Dashed line: declared site boundary</span><span>'+note+'</span></div></div>'}
+function logHtml(){
+  var d=S.draft;
+  if(S.role!=='agent')return '<div class="empty"><b>Logging is a field agent action</b>Switch to Field agent to log a new sample.</div>';
+  var fields=S.samples.filter(function(s){return s.type==='sample'});
+  var next='CR-'+pad(Math.max.apply(null,S.samples.map(function(s){return parseInt(s.id.slice(3),10)}))+1);
+  var pos=d.type==='blank'?'Not needed for a blank.':(d.pos?'E '+Math.round(d.pos.E)+' m, N '+Math.round(d.pos.N)+' m · ±5 m (simulated GPS)':'No position captured yet.');
+  return '<div style="padding-top:26px;max-width:640px"><span class="eyebrow">New record</span><p style="margin-top:8px;color:var(--muted)">Works offline on a phone. The record is saved with the time and position, then locked with a fingerprint.</p>'+
+   '<form class="f" data-form="create">'+
+   '<label>Sample ID<input id="lg-id" value="'+next+'" readonly></label>'+
+   '<label>Type<select id="lg-type"><option value="sample"'+(d.type==='sample'?' selected':'')+'>Field sample</option><option value="duplicate"'+(d.type==='duplicate'?' selected':'')+'>Duplicate</option><option value="blank"'+(d.type==='blank'?' selected':'')+'>Blank</option></select></label>'+
+   (d.type==='duplicate'?'<label>Duplicate of<select id="lg-parent">'+fields.map(function(s){return '<option value="'+s.id+'"'+(d.parent===s.id?' selected':'')+'>'+s.id+'</option>'}).join('')+'</select></label>':'')+
+   '<label>Logged by<input id="lg-agent" value="'+esc(d.agent)+'" maxlength="30"></label>'+
+   '<div style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:center"><button class="btn quiet" type="button" data-act="gps"'+(d.type==='blank'?' disabled':'')+'>Capture position</button><button class="btn quiet" type="button" data-act="gpsbad"'+(d.type==='blank'?' disabled':'')+'>Capture a position outside the site (demo)</button><span class="mono" style="color:var(--muted);font-size:12px;min-width:0">'+pos+'</span></div>'+
+   '<div style="grid-column:1/-1"><button class="btn" type="submit">Save sample</button></div></form></div>'}
+function render(){
+  renderRole();renderStats();var v=document.getElementById('view'),h='';
+  if(S.tab==='samples')h='<div class="split'+(S.sel?' has-sel':'')+'">'+listHtml()+detailHtml()+'</div>';
+  else if(S.tab==='map')h=mapHtml()+(S.sel?'<div style="margin-top:8px">'+detailHtml()+'</div>':'');
+  else h=logHtml();
+  v.innerHTML=sjAll(h)}
+function sjAll(h){return h.replace(/>([^<]*)Cr2O3([^<]*)</g,function(m,a,b){return '>'+a+'Cr<sub>2</sub>O<sub>3</sub>'+b+'<'}).replace(/(<label>[^<]*), Cr2O3 %/g,'$1, Cr<sub>2</sub>O<sub>3</sub> %')}
+
+async function act(a,v){
+  if(a==='role'){S.role=v;if(S.tab==='map'&&v==='lab')S.tab='samples'}
+  else if(a==='tab')S.tab=v;
+  else if(a==='select'||a==='mapsel'){S.sel=v}
+  else if(a==='back')S.sel=null;
+  else if(a==='verify'){S.ver[v]=await verifyChain(byId(v))}
+  else if(a==='verifyall'){await verifyAll(true)}
+  else if(a==='tamper'){var s=byId(v);s.events[0].time-=5*H;S.ver[v]=null}
+  else if(a==='handover'){await addEvent(byId(v),{type:'handover',actor:'Agent T.',place:'Transport',note:'Handed to transport'});S.ver[v]=await verifyChain(byId(v))}
+  else if(a==='receive'){await addEvent(byId(v),{type:'received',actor:'Lab clerk',place:'Lab reception',note:'Received, bag seal intact'});S.ver[v]=await verifyChain(byId(v))}
+  else if(a==='clock'){S.offset+=24*H}
+  else if(a==='reset'){await seed();S.tab='samples';S.role='agent'}
+  else if(a==='gps'){S.draft.pos=randomPos(false)}
+  else if(a==='gpsbad'){S.draft.pos=randomPos(true)}
+  render()}
+function randomPos(outside){if(outside)return {E:1250+Math.random()*60,N:200+Math.random()*400};for(var i=0;i<200;i++){var e=150+Math.random()*900,n=100+Math.random()*600;if(inPoly(e,n))return {E:e,N:n}}return {E:500,N:400}}
+document.addEventListener('click',function(e){var el=e.target.closest('[data-act]');if(!el)return;act(el.dataset.act,el.dataset.v)});
+document.addEventListener('keydown',function(e){var t=e.target;if((e.key==='Enter'||e.key===' ')&&t.getAttribute&&t.getAttribute('data-act')==='mapsel'){e.preventDefault();act('mapsel',t.getAttribute('data-v'))}});
+document.addEventListener('change',function(e){var id=e.target.id;if(id==='lg-type'){S.draft.type=e.target.value;if(S.draft.type==='blank')S.draft.pos=null;if(S.draft.type==='duplicate'&&!S.draft.parent){var f=S.samples.filter(function(s){return s.type==='sample'})[0];S.draft.parent=f?f.id:''}render()}
+  if(id==='lg-parent')S.draft.parent=e.target.value});
+document.addEventListener('input',function(e){if(e.target.id==='lg-agent')S.draft.agent=e.target.value});
+document.addEventListener('submit',async function(e){e.preventDefault();var f=e.target,k=f.dataset.form;
+  if(k==='result'){var s=byId(f.dataset.id),cr=parseFloat(document.getElementById('res-cr').value);if(isNaN(cr))return;
+    await addEvent(s,{type:'result',actor:f.dataset.kind==='lab'?'Lab analyst':'Agent T.',place:f.dataset.kind==='lab'?'Lab':'Field',data:{method:f.dataset.kind==='lab'?'lab':'field',cr:Math.round(cr*10)/10}});S.ver[s.id]=await verifyChain(s)}
+  else if(k==='review'){var s2=byId(f.dataset.id);await addEvent(s2,{type:'review',actor:'Geologist',place:'Office',note:document.getElementById('rv-note').value.trim()});S.ver[s2.id]=await verifyChain(s2)}
+  else if(k==='create'){var d=S.draft,id=document.getElementById('lg-id').value,agent=(document.getElementById('lg-agent').value||'Agent T.').trim().slice(0,30);
+    if(d.type!=='blank'&&!d.pos){var warn=document.querySelector('[data-act="gps"]');if(warn)warn.focus();return}
+    if(d.type==='duplicate'&&!d.parent)return;
+    var ns={id:id,type:d.type,parent:d.type==='duplicate'?d.parent:null,batch:'B-07',E:d.type==='blank'?null:d.pos.E,N:d.type==='blank'?null:d.pos.N,events:[]};
+    if(byId(id))return;
+    await addEvent(ns,{type:'taken',actor:agent,place:d.type==='blank'?'Depot':'Site',note:d.type==='blank'?'Blank inserted at depot':''});
+    S.samples.push(ns);S.ver[id]=await verifyChain(ns);S.draft={type:'sample',parent:'',pos:null,agent:agent};S.tab='samples';S.sel=id}
+  render()});
+
+seed().then(render);
+})();
+</script>
+</body>
+</html>
